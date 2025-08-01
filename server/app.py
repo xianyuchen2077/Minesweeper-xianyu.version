@@ -36,20 +36,23 @@ def add_score():
     """添加新成绩"""
     try:
         data = request.json
+        if data is None:
+            return jsonify({"error": "无效的JSON数据"}), 400
+
         name = data.get('name', '').strip()
         difficulty = data.get('difficulty', '')
         time_seconds = data.get('time', 0)
-        
+
         if not name or not difficulty or time_seconds <= 0:
             return jsonify({"error": "无效的数据"}), 400
-        
+
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
         c.execute('INSERT INTO scores (name, difficulty, time) VALUES (?, ?, ?)',
-                  (name, difficulty, time_seconds))
+                (name, difficulty, time_seconds))
         conn.commit()
         conn.close()
-        
+
         return jsonify({"success": True, "message": "成绩保存成功！"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -61,13 +64,13 @@ def get_scores(difficulty):
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
         c.execute('''
-            SELECT name, time, created_at 
-            FROM scores 
-            WHERE difficulty = ? 
-            ORDER BY time ASC 
+            SELECT name, time, created_at
+            FROM scores
+            WHERE difficulty = ?
+            ORDER BY time ASC
             LIMIT 10
         ''', (difficulty,))
-        
+
         scores = []
         for row in c.fetchall():
             scores.append({
@@ -75,7 +78,7 @@ def get_scores(difficulty):
                 "time": row[1],
                 "created_at": row[2]
             })
-        
+
         conn.close()
         return jsonify(scores)
     except Exception as e:
@@ -88,11 +91,11 @@ def get_all_scores():
         conn = sqlite3.connect(DATABASE)
         c = conn.cursor()
         c.execute('''
-            SELECT difficulty, name, time, created_at 
-            FROM scores 
+            SELECT difficulty, name, time, created_at
+            FROM scores
             ORDER BY difficulty, time ASC
         ''')
-        
+
         all_scores = {}
         for row in c.fetchall():
             difficulty, name, time_seconds, created_at = row
@@ -103,11 +106,11 @@ def get_all_scores():
                 "time": time_seconds,
                 "created_at": created_at
             })
-        
+
         # 每个难度只保留前10名
         for difficulty in all_scores:
             all_scores[difficulty] = all_scores[difficulty][:10]
-        
+
         conn.close()
         return jsonify(all_scores)
     except Exception as e:
@@ -121,4 +124,4 @@ def health_check():
 if __name__ == '__main__':
     init_db()
     port = int(os.environ.get('PORT', 5000))
-    app.run(host='0.0.0.0', port=port, debug=False) 
+    app.run(host='0.0.0.0', port=port, debug=False)
