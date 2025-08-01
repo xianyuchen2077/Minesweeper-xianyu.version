@@ -4,6 +4,7 @@ from typing import Optional
 import time
 import json
 import os
+import requests
 from board import Board
 
 class MinesweeperGUI:
@@ -16,10 +17,50 @@ class MinesweeperGUI:
         self.timer_running = False
         self.current_difficulty = f"{rows}x{cols}_{mines}"  # 当前难度标识
         self.leaderboard_file = "leaderboard.json"
+        # 网络排行榜服务器地址（部署后需要更新）
+        self.api_url = "https://your-app-name.railway.app/api"  # 替换为你的服务器地址
+        self.online_mode = True  # 是否启用网络模式
         self.create_menu()
         self.create_widgets(rows, cols)
         self.create_timer()
         self.update_buttons()
+
+    def test_connection(self):
+        """测试网络连接"""
+        try:
+            response = requests.get(f"{self.api_url}/health", timeout=5)
+            return response.status_code == 200
+        except:
+            return False
+
+    def add_score_online(self, difficulty, player_name, time_seconds):
+        """上传成绩到网络排行榜"""
+        if not self.online_mode:
+            return False
+        try:
+            response = requests.post(f"{self.api_url}/scores",
+                                json={
+                                    "name": player_name,
+                                    "difficulty": difficulty,
+                                    "time": time_seconds
+                                },
+                                timeout=10)
+            return response.status_code == 200
+        except Exception as e:
+            print(f"网络上传失败: {e}")
+            return False
+
+    def load_leaderboard_online(self):
+        """从网络加载排行榜"""
+        if not self.online_mode:
+            return {}
+        try:
+            response = requests.get(f"{self.api_url}/scores", timeout=10)
+            if response.status_code == 200:
+                return response.json()
+        except Exception as e:
+            print(f"网络加载失败: {e}")
+        return {}
 
     def load_leaderboard(self):
         """加载排行榜数据"""
@@ -37,7 +78,8 @@ class MinesweeperGUI:
             json.dump(leaderboard, f, ensure_ascii=False, indent=2)
 
     def add_score(self, difficulty, player_name, time_seconds):
-        """添加新成绩到排行榜"""
+        """添加新成绩到排行榜（本地+网络）"""
+        # 保存到本地
         leaderboard = self.load_leaderboard()
 
         if difficulty not in leaderboard:
@@ -57,12 +99,33 @@ class MinesweeperGUI:
 
         self.save_leaderboard(leaderboard)
 
+        # 尝试上传到网络
+        if self.online_mode:
+            online_success = self.add_score_online(difficulty, player_name, time_seconds)
+            return online_success
+        return True
+
     def show_leaderboard(self):
-        """显示排行榜"""
-        leaderboard = self.load_leaderboard()
+        """显示排行榜（本地+网络）"""
+        # 尝试加载网络排行榜
+        online_leaderboard = {}
+        network_status = "离线"
+
+        if self.online_mode:
+            if self.test_connection():
+                online_leaderboard = self.load_leaderboard_online()
+                network_status = "在线"
+            else:
+                network_status = "网络连接失败"
+
+        # 加载本地排行榜作为备用
+        local_leaderboard = self.load_leaderboard()
+
+        # 合并排行榜（网络优先）
+        leaderboard = online_leaderboard if online_leaderboard else local_leaderboard
 
         dialog = tk.Toplevel(self.master)
-        dialog.title("排行榜")
+        dialog.title(f"排行榜 ({network_status})")
         dialog.geometry("500x600")
         dialog.resizable(False, False)
         dialog.configure(bg='lightyellow')
@@ -75,10 +138,13 @@ class MinesweeperGUI:
         y = (dialog.winfo_screenheight() // 2) - (600 // 2)
         dialog.geometry(f"500x600+{x}+{y}")
 
-        # 标题
-        tk.Label(dialog, text="🏆 排行榜 🏆", 
-                font=("楷体", 24, "bold"), 
-                bg='lightyellow', fg='darkorange').pack(pady=20)
+        # 标题和网络状态
+        tk.Label(dialog, text="🏆 排行榜 🏆",
+                font=("楷体", 24, "bold"),
+                bg='lightyellow', fg='darkorange').pack(pady=10)
+        tk.Label(dialog, text=f"网络状态: {network_status}",
+                font=("楷体", 12),
+                bg='lightyellow', fg='gray').pack(pady=5)
 
         # 创建滚动框架
         canvas = tk.Canvas(dialog, bg='lightyellow')
@@ -107,36 +173,46 @@ class MinesweeperGUI:
 
             # 难度标题
             diff_name = difficulty_names.get(difficulty, f"自定义难度 ({difficulty})")
-            tk.Label(scrollable_frame, text=f"📊 {diff_name}", 
-                    font=("楷体", 16, "bold"), 
+            tk.Label(scrollable_frame, text=f"📊 {diff_name}",
+                    font=("楷体", 16, "bold"),
                     bg='lightyellow', fg='darkblue').pack(pady=(20, 10))
 
             # 成绩列表
             for i, score in enumerate(scores, 1):
                 rank_emoji = ["🥇", "🥈", "🥉"][i-1] if i <= 3 else f"#{i}"
                 score_text = f"{rank_emoji} {score['name']} - {score['time']}秒"
-                tk.Label(scrollable_frame, text=score_text, 
-                        font=("楷体", 12), 
+                tk.Label(scrollable_frame, text=score_text,
+                        font=("楷体", 12),
                         bg='lightyellow', fg='black').pack(pady=2)
 
-            tk.Label(scrollable_frame, text="─" * 30, 
-                    font=("楷体", 12), 
+            tk.Label(scrollable_frame, text="─" * 30,
+                    font=("楷体", 12),
                     bg='lightyellow', fg='gray').pack(pady=10)
 
         canvas.pack(side="left", fill="both", expand=True, padx=20, pady=20)
         scrollbar.pack(side="right", fill="y")
 
+        # 按钮框架
+        button_frame = tk.Frame(dialog, bg='lightyellow')
+        button_frame.pack(pady=10)
+
+        # 刷新按钮
+        tk.Button(button_frame, text="刷新",
+                font=("楷体", 12, "bold"),
+                bg='lightblue', fg='darkblue',
+                command=lambda: [dialog.destroy(), self.show_leaderboard()]).pack(side=tk.LEFT, padx=10)
+
         # 关闭按钮
-        tk.Button(dialog, text="关闭",
-                font=("楷体", 14, "bold"),
+        tk.Button(button_frame, text="关闭",
+                font=("楷体", 12, "bold"),
                 bg='lightcoral', fg='darkred',
-                command=dialog.destroy).pack(pady=20)
+                command=dialog.destroy).pack(side=tk.LEFT, padx=10)
 
     def show_name_input(self, time_seconds):
         """显示用户名输入对话框"""
         dialog = tk.Toplevel(self.master)
         dialog.title("记录成绩")
-        dialog.geometry("400x300")
+        dialog.geometry("400x350")
         dialog.resizable(False, False)
         dialog.configure(bg='lightgreen')
 
@@ -145,8 +221,8 @@ class MinesweeperGUI:
         dialog.grab_set()
         dialog.update_idletasks()
         x = (dialog.winfo_screenwidth() // 2) - (400 // 2)
-        y = (dialog.winfo_screenheight() // 2) - (300 // 2)
-        dialog.geometry(f"400x300+{x}+{y}")
+        y = (dialog.winfo_screenheight() // 2) - (350 // 2)
+        dialog.geometry(f"400x350+{x}+{y}")
 
         # 标题
         tk.Label(dialog, text="🎉 恭喜获胜！",
@@ -168,25 +244,43 @@ class MinesweeperGUI:
         name_entry.pack(pady=10)
         name_entry.focus()
 
+        # 状态标签
+        status_label = tk.Label(dialog, text="",
+                            font=("楷体", 10),
+                            bg='lightgreen', fg='gray')
+        status_label.pack(pady=5)
+
         def save_score():
             player_name = name_var.get().strip()
             if not player_name:
                 messagebox.showerror("错误", "请输入名字")
                 return
 
-            # 添加成绩到排行榜
-            self.add_score(self.current_difficulty, player_name, time_seconds)
-            dialog.destroy()
-            messagebox.showinfo("成功", f"成绩已保存！\n{player_name} - {time_seconds}秒")
+            # 禁用按钮防止重复提交
+            save_btn.config(state='disabled')
+            status_label.config(text="正在保存成绩...", fg='blue')
+            dialog.update()
+
+            # 添加成绩到排行榜（本地+网络）
+            success = self.add_score(self.current_difficulty, player_name, time_seconds)
+
+            if success:
+                status_label.config(text="✅ 成绩保存成功！", fg='green')
+                dialog.after(1500, dialog.destroy)  # 1.5秒后自动关闭
+                messagebox.showinfo("成功", f"成绩已保存！\n{player_name} - {time_seconds}秒")
+            else:
+                status_label.config(text="⚠️ 本地保存成功，网络上传失败", fg='orange')
+                save_btn.config(state='normal')  # 重新启用按钮
 
         # 按钮框架
         button_frame = tk.Frame(dialog, bg='lightgreen')
-        button_frame.pack(pady=30)
+        button_frame.pack(pady=20)
 
-        tk.Button(button_frame, text="保存成绩",
+        save_btn = tk.Button(button_frame, text="保存成绩",
                 font=("楷体", 14, "bold"),
                 bg='lightblue', fg='darkblue',
-                command=save_score).pack(side=tk.LEFT, padx=10)
+                command=save_score)
+        save_btn.pack(side=tk.LEFT, padx=10)
 
         tk.Button(button_frame, text="跳过",
                 font=("楷体", 14, "bold"),
