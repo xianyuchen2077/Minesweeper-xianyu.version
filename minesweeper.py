@@ -4,7 +4,6 @@ from typing import Optional
 import time
 import json
 import os
-import requests
 from board import Board
 
 class MinesweeperGUI:
@@ -15,52 +14,14 @@ class MinesweeperGUI:
         self.game_started = False
         self.start_time = 0
         self.timer_running = False
+        self.is_paused = False
+        self.pause_time = 0                                 # 暂停的累计时间
         self.current_difficulty = f"{rows}x{cols}_{mines}"  # 当前难度标识
         self.leaderboard_file = "leaderboard.json"
-        # 网络排行榜服务器地址（部署后需要更新）
-        self.api_url = "https://your-app-name.railway.app/api"  # 替换为你的服务器地址
-        self.online_mode = True  # 是否启用网络模式
         self.create_menu()
         self.create_widgets(rows, cols)
         self.create_timer()
         self.update_buttons()
-
-    def test_connection(self):
-        """测试网络连接"""
-        try:
-            response = requests.get(f"{self.api_url}/health", timeout=5)
-            return response.status_code == 200
-        except:
-            return False
-
-    def add_score_online(self, difficulty, player_name, time_seconds):
-        """上传成绩到网络排行榜"""
-        if not self.online_mode:
-            return False
-        try:
-            response = requests.post(f"{self.api_url}/scores",
-                                json={
-                                    "name": player_name,
-                                    "difficulty": difficulty,
-                                    "time": time_seconds
-                                },
-                                timeout=10)
-            return response.status_code == 200
-        except Exception as e:
-            print(f"网络上传失败: {e}")
-            return False
-
-    def load_leaderboard_online(self):
-        """从网络加载排行榜"""
-        if not self.online_mode:
-            return {}
-        try:
-            response = requests.get(f"{self.api_url}/scores", timeout=10)
-            if response.status_code == 200:
-                return response.json()
-        except Exception as e:
-            print(f"网络加载失败: {e}")
-        return {}
 
     def load_leaderboard(self):
         """加载排行榜数据"""
@@ -78,8 +39,7 @@ class MinesweeperGUI:
             json.dump(leaderboard, f, ensure_ascii=False, indent=2)
 
     def add_score(self, difficulty, player_name, time_seconds):
-        """添加新成绩到排行榜（本地+网络）"""
-        # 保存到本地
+        """添加新成绩到排行榜"""
         leaderboard = self.load_leaderboard()
 
         if difficulty not in leaderboard:
@@ -98,34 +58,14 @@ class MinesweeperGUI:
         leaderboard[difficulty] = leaderboard[difficulty][:10]
 
         self.save_leaderboard(leaderboard)
-
-        # 尝试上传到网络
-        if self.online_mode:
-            online_success = self.add_score_online(difficulty, player_name, time_seconds)
-            return online_success
         return True
 
     def show_leaderboard(self):
-        """显示排行榜（本地+网络）"""
-        # 尝试加载网络排行榜
-        online_leaderboard = {}
-        network_status = "离线"
-
-        if self.online_mode:
-            if self.test_connection():
-                online_leaderboard = self.load_leaderboard_online()
-                network_status = "在线"
-            else:
-                network_status = "网络连接失败"
-
-        # 加载本地排行榜作为备用
-        local_leaderboard = self.load_leaderboard()
-
-        # 合并排行榜（网络优先）
-        leaderboard = online_leaderboard if online_leaderboard else local_leaderboard
+        """显示排行榜"""
+        leaderboard = self.load_leaderboard()
 
         dialog = tk.Toplevel(self.master)
-        dialog.title(f"排行榜 ({network_status})")
+        dialog.title("排行榜")
         dialog.geometry("500x600")
         dialog.resizable(False, False)
         dialog.configure(bg='lightyellow')
@@ -138,13 +78,10 @@ class MinesweeperGUI:
         y = (dialog.winfo_screenheight() // 2) - (600 // 2)
         dialog.geometry(f"500x600+{x}+{y}")
 
-        # 标题和网络状态
+        # 标题
         tk.Label(dialog, text="🏆 排行榜 🏆",
                 font=("楷体", 24, "bold"),
                 bg='lightyellow', fg='darkorange').pack(pady=10)
-        tk.Label(dialog, text=f"网络状态: {network_status}",
-                font=("楷体", 12),
-                bg='lightyellow', fg='gray').pack(pady=5)
 
         # 创建滚动框架
         canvas = tk.Canvas(dialog, bg='lightyellow')
@@ -196,17 +133,11 @@ class MinesweeperGUI:
         button_frame = tk.Frame(dialog, bg='lightyellow')
         button_frame.pack(pady=10)
 
-        # 刷新按钮
-        tk.Button(button_frame, text="刷新",
-                font=("楷体", 12, "bold"),
-                bg='lightblue', fg='darkblue',
-                command=lambda: [dialog.destroy(), self.show_leaderboard()]).pack(side=tk.LEFT, padx=10)
-
         # 关闭按钮
         tk.Button(button_frame, text="关闭",
                 font=("楷体", 12, "bold"),
                 bg='lightcoral', fg='darkred',
-                command=dialog.destroy).pack(side=tk.LEFT, padx=10)
+                command=dialog.destroy).pack(padx=10)
 
     def show_name_input(self, time_seconds):
         """显示用户名输入对话框"""
@@ -261,7 +192,7 @@ class MinesweeperGUI:
             status_label.config(text="正在保存成绩...", fg='blue')
             dialog.update()
 
-            # 添加成绩到排行榜（本地+网络）
+            # 添加成绩到排行榜
             success = self.add_score(self.current_difficulty, player_name, time_seconds)
 
             if success:
@@ -269,7 +200,7 @@ class MinesweeperGUI:
                 dialog.after(1500, dialog.destroy)  # 1.5秒后自动关闭
                 messagebox.showinfo("成功", f"成绩已保存！\n{player_name} - {time_seconds}秒")
             else:
-                status_label.config(text="⚠️ 本地保存成功，网络上传失败", fg='orange')
+                status_label.config(text="❌ 保存失败", fg='red')
                 save_btn.config(state='normal')  # 重新启用按钮
 
         # 按钮框架
@@ -291,22 +222,69 @@ class MinesweeperGUI:
         name_entry.bind('<Return>', lambda e: save_score())
 
     def create_timer(self):
-        # 创建计时器标签
-        self.timer_label = tk.Label(self.master, text="时间: 0", font=("楷体", 12, "bold"))
-        self.timer_label.grid(row=0, column=0, columnspan=self.board.cols, pady=5)
+        # 创建顶部框架，包含时间和暂停按钮
+        self.top_frame = tk.Frame(self.master, bg='lightgray')
+        self.top_frame.grid(row=0, column=0, columnspan=self.board.cols, sticky='ew', pady=5)
+        
+        # 配置列权重让时间标签居中
+        self.top_frame.grid_columnconfigure(0, weight=1)
+        self.top_frame.grid_columnconfigure(1, weight=0)
+        self.top_frame.grid_columnconfigure(2, weight=1)
+        
+        # 左侧占位
+        tk.Label(self.top_frame, text="", bg='lightgray').grid(row=0, column=0)
+        
+        # 中间时间标签
+        self.timer_label = tk.Label(self.top_frame, text="时间: 0", 
+                                   font=("楷体", 16, "bold"), 
+                                   bg='lightgray', fg='darkblue')
+        self.timer_label.grid(row=0, column=1, padx=10)
+        
+        # 右侧暂停按钮
+        self.pause_button = tk.Button(self.top_frame, text="⏸️暂停", 
+                                     font=("楷体", 12, "bold"),
+                                     bg='lightyellow', fg='darkred',
+                                     command=self.toggle_pause)
+        self.pause_button.grid(row=0, column=2, sticky='e', padx=10)
+        
         # 启动计时器更新
         self.update_timer()
 
     def update_timer(self):
-        if self.game_started and not self.board.game_over and not self.board.is_win():
-            elapsed_time = int(time.time() - self.start_time)
+        if self.game_started and not self.board.game_over and not self.board.is_win() and not self.is_paused:
+            elapsed_time = int(time.time() - self.start_time - self.pause_time)
             self.timer_label.config(text=f"时间: {elapsed_time} 秒")
         self.master.after(1000, self.update_timer)  # 每秒更新一次
+
+    def toggle_pause(self):
+        """切换暂停状态"""
+        if not self.game_started or self.board.game_over or self.board.is_win():
+            return
+            
+        if self.is_paused:
+            # 恢复游戏
+            self.is_paused = False
+            self.pause_time += time.time() - self.pause_start_time
+            self.pause_button.config(text="⏸️暂停", bg='lightyellow')
+        else:
+            # 暂停游戏
+            self.is_paused = True
+            self.pause_start_time = time.time()
+            self.pause_button.config(text="▶️继续", bg='lightcoral')
+
+    def resume_from_pause(self):
+        """从暂停状态恢复（点击方格时调用）"""
+        if self.is_paused:
+            self.is_paused = False
+            self.pause_time += time.time() - self.pause_start_time
+            self.pause_button.config(text="⏸️暂停", bg='lightyellow')
 
     def start_game_timer(self):
         if not self.game_started:
             self.game_started = True
             self.start_time = time.time()
+            self.pause_time = 0
+            self.is_paused = False
 
     def create_widgets(self, rows, cols):
         for r in range(rows):
@@ -320,12 +298,12 @@ class MinesweeperGUI:
     def create_menu(self):
         menubar = tk.Menu(self.master)
         # 游戏菜单
-        game_menu = tk.Menu(menubar, tearoff=0)
+        game_menu = tk.Menu(menubar, tearoff=0, font=("楷体", 11))
         game_menu.add_command(label="新游戏", command=self.restart_game)
         game_menu.add_separator()
 
         # 难度子菜单
-        difficulty_menu = tk.Menu(game_menu, tearoff=0)
+        difficulty_menu = tk.Menu(game_menu, tearoff=0, font=("楷体", 11))
         difficulty_menu.add_command(label="基础 (9x9, 10雷)", command=lambda: self.change_difficulty(9, 9, 10))
         difficulty_menu.add_command(label="普通 (16x16, 40雷)", command=lambda: self.change_difficulty(16, 16, 40))
         difficulty_menu.add_command(label="困难 (16x30, 99雷)", command=lambda: self.change_difficulty(16, 30, 99))
@@ -338,7 +316,7 @@ class MinesweeperGUI:
         game_menu.add_command(label="退出", command=self.master.quit)
         menubar.add_cascade(label="游戏", menu=game_menu)
         # 帮助菜单
-        help_menu = tk.Menu(menubar, tearoff=0)
+        help_menu = tk.Menu(menubar, tearoff=0, font=("楷体", 11))
         help_menu.add_command(label="关于游戏", command=self.show_about)
         menubar.add_cascade(label="帮助", menu=help_menu)
         self.master.config(menu=menubar)
@@ -348,7 +326,10 @@ class MinesweeperGUI:
         self.board = Board(rows, cols, mines)
         self.game_started = False
         self.start_time = 0
+        self.pause_time = 0
+        self.is_paused = False
         self.timer_label.config(text="时间: 0")
+        self.pause_button.config(text="⏸️暂停", bg='lightyellow')
         self.current_difficulty = f"{rows}x{cols}_{mines}"
 
         # 重新创建按钮网格
@@ -357,6 +338,10 @@ class MinesweeperGUI:
                 widget.destroy()
 
         self.buttons = [[None for _ in range(cols)] for _ in range(rows)]
+        
+        # 重新配置顶部框架的列数
+        self.top_frame.grid_configure(columnspan=cols)
+        
         self.create_widgets(rows, cols)
         self.update_buttons()
 
@@ -451,6 +436,9 @@ class MinesweeperGUI:
         messagebox.showinfo("关于游戏", "扫雷游戏\n作者：咸鱼\n时间：2025.7.31\npython库：使用tkinter实现\n作者自述：坐高铁，闲的慌，ai写一半，我写一半")
 
     def on_left_click(self, x, y):
+        # 如果游戏暂停，自动恢复
+        self.resume_from_pause()
+        
         # 第一次点击时启动计时器
         self.start_game_timer()
 
@@ -483,6 +471,9 @@ class MinesweeperGUI:
             return
 
     def on_right_click(self, x, y):
+        # 如果游戏暂停，自动恢复
+        self.resume_from_pause()
+        
         self.board.flag(x, y)
         self.update_buttons()
 
@@ -525,7 +516,7 @@ class MinesweeperGUI:
 
     def show_win(self):
         # 计算最终时间
-        final_time = int(time.time() - self.start_time) if self.game_started else 0
+        final_time = int(time.time() - self.start_time - self.pause_time) if self.game_started else 0
 
         # 创建获胜对话框
         dialog = tk.Toplevel(self.master)
@@ -600,7 +591,7 @@ class MinesweeperGUI:
 
     def show_game_over(self):
         # 计算最终时间
-        final_time = int(time.time() - self.start_time) if self.game_started else 0
+        final_time = int(time.time() - self.start_time - self.pause_time) if self.game_started else 0
 
         # 显示所有地雷
         for r in range(self.board.rows):
