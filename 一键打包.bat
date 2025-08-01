@@ -31,7 +31,16 @@ echo.
 echo 正在清理旧文件...
 if exist "build" rmdir /s /q "build"
 if exist "dist" rmdir /s /q "dist"
-if exist "demo" rmdir /s /q "demo"
+
+REM 保留排行榜文件，只删除exe文件
+if exist "demo\扫雷游戏咸鱼版.exe" del /q "demo\扫雷游戏咸鱼版.exe"
+if exist "demo" (
+    echo ✅ 保留了demo文件夹中的排行榜文件
+) else (
+    mkdir "demo"
+    echo ✅ 创建了demo文件夹
+)
+
 if exist "*.spec" del /q "*.spec"
 
 echo ✅ 清理完成
