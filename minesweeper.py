@@ -225,28 +225,28 @@ class MinesweeperGUI:
         # 创建顶部框架，包含时间和暂停按钮
         self.top_frame = tk.Frame(self.master, bg='lightgray')
         self.top_frame.grid(row=0, column=0, columnspan=self.board.cols, sticky='ew', pady=5)
-        
+
         # 配置列权重让时间标签居中
         self.top_frame.grid_columnconfigure(0, weight=1)
         self.top_frame.grid_columnconfigure(1, weight=0)
         self.top_frame.grid_columnconfigure(2, weight=1)
-        
+
         # 左侧占位
         tk.Label(self.top_frame, text="", bg='lightgray').grid(row=0, column=0)
-        
+
         # 中间时间标签
-        self.timer_label = tk.Label(self.top_frame, text="时间: 0", 
-                                   font=("楷体", 16, "bold"), 
-                                   bg='lightgray', fg='darkblue')
+        self.timer_label = tk.Label(self.top_frame, text="时间: 0秒",
+                                font=("楷体", 16, "bold"),
+                                bg='lightgray', fg='darkblue')
         self.timer_label.grid(row=0, column=1, padx=10)
-        
+
         # 右侧暂停按钮
-        self.pause_button = tk.Button(self.top_frame, text="⏸️暂停", 
-                                     font=("楷体", 12, "bold"),
-                                     bg='lightyellow', fg='darkred',
-                                     command=self.toggle_pause)
+        self.pause_button = tk.Button(self.top_frame, text="⏸️暂停",
+                                    font=("楷体", 12, "bold"),
+                                    bg='lightyellow', fg='darkred',
+                                    command=self.toggle_pause)
         self.pause_button.grid(row=0, column=2, sticky='e', padx=10)
-        
+
         # 启动计时器更新
         self.update_timer()
 
@@ -260,7 +260,7 @@ class MinesweeperGUI:
         """切换暂停状态"""
         if not self.game_started or self.board.game_over or self.board.is_win():
             return
-            
+
         if self.is_paused:
             # 恢复游戏
             self.is_paused = False
@@ -338,10 +338,10 @@ class MinesweeperGUI:
                 widget.destroy()
 
         self.buttons = [[None for _ in range(cols)] for _ in range(rows)]
-        
+
         # 重新配置顶部框架的列数
         self.top_frame.grid_configure(columnspan=cols)
-        
+
         self.create_widgets(rows, cols)
         self.update_buttons()
 
@@ -438,7 +438,7 @@ class MinesweeperGUI:
     def on_left_click(self, x, y):
         # 如果游戏暂停，自动恢复
         self.resume_from_pause()
-        
+
         # 第一次点击时启动计时器
         self.start_game_timer()
 
@@ -473,7 +473,7 @@ class MinesweeperGUI:
     def on_right_click(self, x, y):
         # 如果游戏暂停，自动恢复
         self.resume_from_pause()
-        
+
         self.board.flag(x, y)
         self.update_buttons()
 
