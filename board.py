@@ -112,4 +112,4 @@ class Board:
                     count += 1
         if count > 1:                # 如果格子有雷且未被插旗的数量大于一个，返回False
             return False
-        return True                     # 如果所有格子都已翻开，返回True
+        return True                  # 如果所有格子都已翻开，返回True

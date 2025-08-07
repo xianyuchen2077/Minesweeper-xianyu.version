@@ -476,6 +476,10 @@ class MinesweeperGUI:
 
         self.board.flag(x, y)
         self.update_buttons()
+        if self.board.is_win():
+            self.show_win()
+        elif self.board.game_over:
+            self.show_game_over()
 
     def update_buttons(self):
         # 数字颜色配置，可以在这里修改颜色

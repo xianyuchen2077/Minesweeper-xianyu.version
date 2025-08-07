@@ -57,6 +57,15 @@ if errorlevel 1 (
 echo ✅ 图标创建完成
 echo.
 
+echo 正在准备排行榜文件...
+if not exist "leaderboard.json" (
+    echo {"9x9_10": [], "16x16_40": [], "16x30_99": []} > leaderboard.json
+    echo ✅ 创建了默认排行榜文件
+) else (
+    echo ✅ 找到现有排行榜文件
+)
+echo.
+
 echo 开始打包扫雷游戏...
 echo 这可能需要几分钟时间，请耐心等待...
 echo.
@@ -76,6 +85,16 @@ echo ========================================
 echo ✅ 打包成功！
 echo ========================================
 echo.
+
+echo 正在恢复排行榜数据...
+if exist "demo\leaderboard.json" (
+    copy "demo\leaderboard.json" "demo\leaderboard_backup.json" >nul 2>&1
+    echo ✅ 已备份现有排行榜数据
+) else (
+    echo ℹ️  没有找到现有排行榜数据
+)
+echo.
+
 echo 📁 可执行文件位置：demo\扫雷游戏咸鱼版.exe
 echo 🎨 图标文件位置：icon.ico
 echo.
