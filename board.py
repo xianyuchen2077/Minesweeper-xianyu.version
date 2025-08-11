@@ -104,12 +104,15 @@ class Board:
         # 如果雷还没放置，不可能获胜
         if not self.mines_placed:
             return False
-        count = 0
+        mine_count = 0
+        cell_unrevealed = 0
         for r in range(self.rows):
             for c in range(self.cols):
                 cell = self.grid[r][c]
                 if cell.has_mine and not cell.flagged:
-                    count += 1
-        if count > 1:                # 如果格子有雷且未被插旗的数量大于一个，返回False
+                    mine_count += 1
+                if not cell.revealed:
+                    cell_unrevealed += 1
+        if mine_count > 1 or cell_unrevealed > 1:                # 如果格子有雷且未被插旗的数量大于一个，返回False
             return False
         return True                  # 如果所有格子都已翻开，返回True
