@@ -113,6 +113,8 @@ class Board:
                     mine_count += 1
                 if not cell.revealed:
                     cell_unrevealed += 1
-        if mine_count > 1 or cell_unrevealed > 1:                # 如果格子有雷且未被插旗的数量大于一个，返回False
+        if mine_count > 1:      # 如果格子有雷且未被插旗的数量大于一个，返回False
             return False
+        if mine_count == 1 and cell_unrevealed == 1:
+            return True
         return True                  # 如果所有格子都已翻开，返回True
